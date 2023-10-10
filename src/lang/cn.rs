@@ -295,7 +295,6 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("Overwrite", "覆盖"),
         ("This file exists, skip or overwrite this file?", "这个文件/文件夹已存在，跳过/覆盖？"),
         ("Quit", "退出"),
-        ("doc_mac_permission", "https://rustdesk.com/docs/zh-cn/manual/mac#%E5%90%AF%E7%94%A8%E6%9D%83%E9%99%90"),
         ("Help", "帮助"),
         ("Failed", "失败"),
         ("Succeeded", "成功"),
@@ -535,8 +534,8 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("List View", "列表视图"),
         ("Select", "选择"),
         ("Toggle Tags", "切换标签"),
-        ("pull_ab_failed_tip", "未成功获取地址簿"),
-        ("push_ab_failed_tip", "未成功上传地址簿"),
+        ("pull_ab_failed_tip", "获取地址簿失败"),
+        ("push_ab_failed_tip", "上传地址簿失败"),
         ("synced_peer_readded_tip", "最近会话中存在的设备将会被重新同步到地址簿。"),
         ("Change Color", "更改颜色"),
         ("Primary Color", "基本色"),
@@ -556,5 +555,6 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("Connection failed due to inactivity", "由于长时间无操作, 连接被自动断开"),
         ("Check for software update on startup", "启动时检查软件更新"),
         ("upgrade_rustdesk_server_pro_to_{}_tip", "请升级专业版服务器到{}或更高版本！"),
+        ("pull_group_failed_tip", "获取组信息失败"),
     ].iter().cloned().collect();
 }

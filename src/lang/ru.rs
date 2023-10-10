@@ -295,7 +295,6 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("Overwrite", "Перезаписать"),
         ("This file exists, skip or overwrite this file?", "Файл существует, пропустить или перезаписать его?"),
         ("Quit", "Выйти"),
-        ("doc_mac_permission", "https://rustdesk.com/docs/ru/manual/mac/#включение-разрешений"),
         ("Help", "Помощь"),
         ("Failed", "Не выполнено"),
         ("Succeeded", "Выполнено"),
@@ -555,6 +554,7 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("auto_disconnect_option_tip", "Автоматически закрывать входящие сеансы при неактивности пользователя"),
         ("Connection failed due to inactivity", "Подключение не выполнено из-за неактивности"),
         ("Check for software update on startup", "Проверять обновления программы при запуске"),
-        ("upgrade_rustdesk_server_pro_to_{}_tip", ""),
+        ("upgrade_rustdesk_server_pro_to_{}_tip", "Обновите RustDesk Server Pro до версии {} или новее!"),
+        ("pull_group_failed_tip", "Невозможно обновить группу"),
     ].iter().cloned().collect();
 }

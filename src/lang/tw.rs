@@ -127,7 +127,7 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("Optimize reaction time", "最佳化反應時間"),
         ("Custom", "自訂"),
         ("Show remote cursor", "顯示遠端游標"),
-        ("Show quality monitor", "顯示質量監測"),
+        ("Show quality monitor", "顯示品質監測"),
         ("Disable clipboard", "停用剪貼簿"),
         ("Lock after session end", "工作階段結束後鎖定電腦"),
         ("Insert", "插入"),
@@ -295,7 +295,6 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("Overwrite", "取代"),
         ("This file exists, skip or overwrite this file?", "此檔案/資料夾已存在，要略過或是取代此檔案嗎？"),
         ("Quit", "退出"),
-        ("doc_mac_permission", "https://rustdesk.com/docs/zh-tw/manual/mac/#啟用權限"),
         ("Help", "說明"),
         ("Failed", "失敗"),
         ("Succeeded", "成功"),
@@ -445,7 +444,7 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("Display", "顯示"),
         ("Default View Style", "預設顯示方式"),
         ("Default Scroll Style", "預設滾動方式"),
-        ("Default Image Quality", "預設圖像質量"),
+        ("Default Image Quality", "預設圖像品質"),
         ("Default Codec", "預設編解碼器"),
         ("Bitrate", "位元速率"),
         ("FPS", "幀率"),
@@ -556,5 +555,6 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("Connection failed due to inactivity", ""),
         ("Check for software update on startup", ""),
         ("upgrade_rustdesk_server_pro_to_{}_tip", ""),
+        ("pull_group_failed_tip", ""),
     ].iter().cloned().collect();
 }

@@ -295,7 +295,6 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("Overwrite", "Përshkruaj"),
         ("This file exists, skip or overwrite this file?", "Ky skedar ekziston , tejkalo ose përshkruaj këtë skedarë"),
         ("Quit", "Hiq"),
-        ("doc_mac_permission", "https://rustdesk.com/docs/en/manual/mac/#enable-permissions"),
         ("Help", "Ndihmë"),
         ("Failed", "Deshtoi"),
         ("Succeeded", "Sukses"),
@@ -556,5 +555,6 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("Connection failed due to inactivity", ""),
         ("Check for software update on startup", ""),
         ("upgrade_rustdesk_server_pro_to_{}_tip", ""),
+        ("pull_group_failed_tip", ""),
     ].iter().cloned().collect();
 }

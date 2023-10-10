@@ -295,7 +295,6 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("Overwrite", "Sovrascrivi"),
         ("This file exists, skip or overwrite this file?", "Questo file esiste, vuoi ignorarlo o sovrascrivere questo file?"),
         ("Quit", "Esci"),
-        ("doc_mac_permission", "https://rustdesk.com/docs/en/manual/mac/#enable-permissions"),
         ("Help", "Aiuto"),
         ("Failed", "Fallito"),
         ("Succeeded", "Completato"),
@@ -556,5 +555,6 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("Connection failed due to inactivity", "Connessione non riuscita a causa di inattività"),
         ("Check for software update on startup", "All'avvio verifica presenza aggiornamenti programma"),
         ("upgrade_rustdesk_server_pro_to_{}_tip", "Aggiorna RustDesk Server Pro alla versione {} o successiva!"),
+        ("pull_group_failed_tip", "Impossibile aggiornare il gruppo"),
     ].iter().cloned().collect();
 }
