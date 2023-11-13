@@ -213,9 +213,11 @@ class ServiceNotRunningNotification extends StatelessWidget {
                 onPressed: () {
                   if (gFFI.userModel.userName.value.isEmpty && bind.mainGetLocalOption(key: "show-scam-warning") != "N") {
                     showScamWarning(context, serverModel);
-                  } else {
+                  //if (gFFI.userModel.userName.value.isEmpty && bind.mainGetLocalOption(key: "show-scam-warning") != "N") {
+                  //  _showScamWarning(context, serverModel);
+                  //} else {
                     serverModel.toggleService();
-                  }
+                  //}
                 },
                 label: Text(translate("Start service")))
           ],
