@@ -130,9 +130,7 @@ if(VCPKG_TARGET_IS_WINDOWS AND NOT VCPKG_TARGET_IS_MINGW)
     endif()
 
 else()
-    vcpkg_find_acquire_program(YASM)
-    get_filename_component(YASM_EXE_PATH ${YASM} DIRECTORY)
-    vcpkg_add_to_path(${YASM_EXE_PATH})
+    yasm_tool_helper(APPEND_TO_PATH)
 
     set(OPTIONS "--disable-examples --disable-tools --disable-docs --disable-unit-tests --enable-pic")
 
@@ -165,6 +163,22 @@ else()
         message(FATAL_ERROR "libvpx does not support architecture ${VCPKG_TARGET_ARCHITECTURE}")
     endif()
 
+    vcpkg_cmake_get_vars(cmake_vars_file)
+    include("${cmake_vars_file}")
+
+    # Set environment variables for configure
+    if(VCPKG_DETECTED_CMAKE_C_COMPILER MATCHES "([^\/]*-)gcc$")
+        message(STATUS "Cross-building for ${TARGET_TRIPLET} with ${CMAKE_MATCH_1}")
+        set(ENV{CROSS} ${CMAKE_MATCH_1})
+    else()
+        set(ENV{CC} ${VCPKG_DETECTED_CMAKE_C_COMPILER})
+        set(ENV{CXX} ${VCPKG_DETECTED_CMAKE_CXX_COMPILER})
+        set(ENV{AR} ${VCPKG_DETECTED_CMAKE_AR})
+        set(ENV{LD} ${VCPKG_DETECTED_CMAKE_LINKER})
+        set(ENV{RANLIB} ${VCPKG_DETECTED_CMAKE_RANLIB})
+        set(ENV{STRIP} ${VCPKG_DETECTED_CMAKE_STRIP})
+    endif()
+
     if(VCPKG_TARGET_IS_MINGW)
         if(LIBVPX_TARGET_ARCH STREQUAL "x86")
             set(LIBVPX_TARGET "x86-win32-gcc")
@@ -173,21 +187,8 @@ else()
         endif()
     elseif(VCPKG_TARGET_IS_LINUX)
         set(LIBVPX_TARGET "${LIBVPX_TARGET_ARCH}-linux-gcc")
-        include($ENV{VCPKG_ROOT}/buildtrees/detect_compiler/${VCPKG_TARGET_ARCHITECTURE}-linux-rel/CMakeFiles/${CMAKE_VERSION}/CMakeCCompiler.cmake)
-        set(ENV{CROSS} "${CMAKE_LIBRARY_ARCHITECTURE}-")
     elseif(VCPKG_TARGET_IS_ANDROID)
-        set(LIBVPX_TARGET "${LIBVPX_TARGET_ARCH}-android-gcc")
-        set(ANDROID_API 21)
-        # From ndk android.toolchsin.cmake
-        if(CMAKE_HOST_SYSTEM_NAME STREQUAL Linux)
-          set(ANDROID_HOST_TAG linux-x86_64)
-        elseif(CMAKE_HOST_SYSTEM_NAME STREQUAL Darwin)
-          set(ANDROID_HOST_TAG darwin-x86_64)
-        elseif(CMAKE_HOST_SYSTEM_NAME STREQUAL Windows)
-          set(ANDROID_HOST_TAG windows-x86_64)
-        endif()
-        set(ANDROID_TOOLCHAIN_ROOT
-          "$ENV{ANDROID_NDK_HOME}/toolchains/llvm/prebuilt/${ANDROID_HOST_TAG}")
+        set(LIBVPX_TARGET "generic-gnu")
         # Settings
         if(VCPKG_TARGET_ARCHITECTURE STREQUAL x86)
             set(ANDROID_TARGET_TRIPLET i686-linux-android)
@@ -200,16 +201,13 @@ else()
             set(OPTIONS "${OPTIONS} --enable-thumb --disable-neon")
         elseif(VCPKG_TARGET_ARCHITECTURE STREQUAL arm64)
             set(ANDROID_TARGET_TRIPLET aarch64-linux-android)
-            set(OPTIONS "${OPTIONS} --enable-thumb --disable-neon")
+            set(OPTIONS "${OPTIONS} --enable-thumb")
         endif()
         # Set environment variables for configure
-        set(ENV{CC} "${ANDROID_TOOLCHAIN_ROOT}/bin/${ANDROID_TARGET_TRIPLET}${ANDROID_API}-clang")
-        set(ENV{CXX} "${ANDROID_TOOLCHAIN_ROOT}/bin/${ANDROID_TARGET_TRIPLET}${ANDROID_API}-clang++")
-        set(ENV{AR} "${ANDROID_TOOLCHAIN_ROOT}/bin/llvm-ar")
-        set(ENV{AS} "${CMAKE_C_COMPILER}")
-        set(ENV{LD} "${ANDROID_TOOLCHAIN_ROOT}/bin/ld")
-        set(ENV{RANLIB} "${ANDROID_TOOLCHAIN_ROOT}/bin/llvm-ranlib")
-        set(ENV{STRIP} "${ANDROID_TOOLCHAIN_ROOT}/bin/llvm-strip")
+        set(ENV{AS} ${VCPKG_DETECTED_CMAKE_C_COMPILER})
+        set(ENV{LDFLAGS} "${LDFLAGS} --target=${VCPKG_DETECTED_CMAKE_C_COMPILER_TARGET}")
+        # Set clang target
+        set(OPTIONS "${OPTIONS} --extra-cflags=--target=${VCPKG_DETECTED_CMAKE_C_COMPILER_TARGET} --extra-cxxflags=--target=${VCPKG_DETECTED_CMAKE_CXX_COMPILER_TARGET}")
     elseif(VCPKG_TARGET_IS_OSX)
         if(VCPKG_TARGET_ARCHITECTURE STREQUAL "arm64")
             set(LIBVPX_TARGET "arm64-darwin20-gcc")
@@ -250,7 +248,7 @@ else()
         message(STATUS "Building libvpx for Release")
         vcpkg_execute_required_process(
             COMMAND
-                ${BASH} --noprofile --norc -c "make -j"
+                ${BASH} --noprofile --norc -c "make -j${VCPKG_CONCURRENCY}"
             WORKING_DIRECTORY "${CURRENT_BUILDTREES_DIR}/${TARGET_TRIPLET}-rel"
             LOGNAME build-${TARGET_TRIPLET}-rel
         )
@@ -283,7 +281,7 @@ else()
         message(STATUS "Building libvpx for Debug")
         vcpkg_execute_required_process(
             COMMAND
-                ${BASH} --noprofile --norc -c "make -j"
+                ${BASH} --noprofile --norc -c "make -j${VCPKG_CONCURRENCY}"
             WORKING_DIRECTORY "${CURRENT_BUILDTREES_DIR}/${TARGET_TRIPLET}-dbg"
             LOGNAME build-${TARGET_TRIPLET}-dbg
         )
