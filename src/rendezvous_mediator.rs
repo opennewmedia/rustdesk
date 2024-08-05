@@ -12,19 +12,16 @@ use uuid::Uuid;
 use hbb_common::{
     allow_err,
     anyhow::{self, bail},
-    config::{Config, CONNECT_TIMEOUT, READ_TIMEOUT, REG_INTERVAL, RENDEZVOUS_PORT},
+    config::{self, Config, CONNECT_TIMEOUT, READ_TIMEOUT, REG_INTERVAL, RENDEZVOUS_PORT},
     futures::future::join_all,
     log,
     protobuf::Message as _,
+    proxy::Proxy,
     rendezvous_proto::*,
     sleep,
     socket_client::{self, connect_tcp, is_ipv4},
     tcp::FramedStream,
-    tokio::{
-        self, select,
-        sync::Mutex,
-        time::{interval, Duration},
-    },
+    tokio::{self, select, sync::Mutex, time::interval},
     udp::FramedSocket,
     AddrMangle, IntoTargetAddr, ResultType, TargetAddr,
 };
@@ -32,12 +29,10 @@ use hbb_common::{
 use crate::{
     check_port,
     server::{check_zombie, new as new_server, ServerPtr},
+    ui_interface::get_buildin_option,
 };
 
 type Message = RendezvousMessage;
-
-const TIMER_OUT: Duration = Duration::from_secs(1);
-const DEFAULT_KEEP_ALIVE: i32 = 60_000;
 
 lazy_static::lazy_static! {
     static ref SOLVING_PK_MISMATCH: Arc<Mutex<String>> = Default::default();
@@ -61,6 +56,11 @@ impl RendezvousMediator {
     }
 
     pub async fn start_all() {
+        if config::is_outgoing_only() {
+            loop {
+                sleep(1.).await;
+            }
+        }
         crate::hbbs_http::sync::start();
         let mut nat_tested = false;
         check_zombie();
@@ -69,7 +69,7 @@ impl RendezvousMediator {
             crate::test_nat_type();
             nat_tested = true;
         }
-        if !Config::get_option("stop-service").is_empty() {
+        if config::option2bool("stop-service", &Config::get_option("stop-service")) {
             crate::test_rendezvous_server();
         }
         let server_cloned = server.clone();
@@ -83,13 +83,14 @@ impl RendezvousMediator {
             });
         }
         // It is ok to run xdesktop manager when the headless function is not allowed.
-        #[cfg(all(target_os = "linux", feature = "linux_headless"))]
-        #[cfg(not(any(feature = "flatpak", feature = "appimage")))]
-        crate::platform::linux_desktop_manager::start_xdesktop();
+        #[cfg(target_os = "linux")]
+        if crate::is_server() {
+            crate::platform::linux_desktop_manager::start_xdesktop();
+        }
         loop {
             let conn_start_time = Instant::now();
             *SOLVING_PK_MISMATCH.lock().await = "".to_owned();
-            if Config::get_option("stop-service").is_empty()
+            if !config::option2bool("stop-service", &Config::get_option("stop-service"))
                 && !crate::platform::installing_service()
             {
                 if !nat_tested {
@@ -122,11 +123,6 @@ impl RendezvousMediator {
                 }
             }
         }
-        // It should be better to call stop_xdesktop.
-        // But for server, it also is Ok without calling this method.
-        // #[cfg(all(target_os = "linux", feature = "linux_headless"))]
-        // #[cfg(not(any(feature = "flatpak", feature = "appimage")))]
-        // crate::platform::linux_desktop_manager::stop_xdesktop();
     }
 
     fn get_host_prefix(host: &str) -> String {
@@ -144,16 +140,15 @@ impl RendezvousMediator {
 
     pub async fn start_udp(server: ServerPtr, host: String) -> ResultType<()> {
         let host = check_port(&host, RENDEZVOUS_PORT);
-        let (mut socket, addr) = socket_client::new_udp_for(&host, CONNECT_TIMEOUT).await?;
+        let (mut socket, mut addr) = socket_client::new_udp_for(&host, CONNECT_TIMEOUT).await?;
         let mut rz = Self {
             addr: addr.clone(),
             host: host.clone(),
             host_prefix: Self::get_host_prefix(&host),
-            keep_alive: DEFAULT_KEEP_ALIVE,
+            keep_alive: crate::DEFAULT_KEEP_ALIVE,
         };
 
-        let mut timer = interval(TIMER_OUT);
-        let mut last_timer: Option<Instant> = None;
+        let mut timer = crate::rustdesk_interval(interval(crate::TIMER_OUT));
         const MIN_REG_TIMEOUT: i64 = 3_000;
         const MAX_REG_TIMEOUT: i64 = 30_000;
         let mut reg_timeout = MIN_REG_TIMEOUT;
@@ -215,15 +210,14 @@ impl RendezvousMediator {
                         break;
                     }
                     let now = Some(Instant::now());
-                    if last_timer.map(|x| x.elapsed() < TIMER_OUT).unwrap_or(false) {
-                        // a workaround of tokio timer bug
-                        continue;
-                    }
-                    last_timer = now;
                     let expired = last_register_resp.map(|x| x.elapsed().as_millis() as i64 >= REG_INTERVAL).unwrap_or(true);
                     let timeout = last_register_sent.map(|x| x.elapsed().as_millis() as i64 >= reg_timeout).unwrap_or(false);
-                    if timeout && reg_timeout < MAX_REG_TIMEOUT {
-                        reg_timeout += MIN_REG_TIMEOUT;
+                    // temporarily disable exponential backoff for android before we add wakeup trigger to force connect in android
+                    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+                    if crate::using_public_server() { // only turn on this for public server, may help DDNS self-hosting user.
+                        if timeout && reg_timeout < MAX_REG_TIMEOUT {
+                            reg_timeout += MIN_REG_TIMEOUT;
+                        }
                     }
                     if timeout || (last_register_sent.is_none() && expired) {
                         if timeout {
@@ -234,9 +228,10 @@ impl RendezvousMediator {
                                 if last_dns_check.elapsed().as_millis() as i64 > DNS_INTERVAL {
                                     // in some case of network reconnect (dial IP network),
                                     // old UDP socket not work any more after network recover
-                                    if let Some((s, addr)) = socket_client::rebind_udp_for(&rz.host).await? {
+                                    if let Some((s, new_addr)) = socket_client::rebind_udp_for(&rz.host).await? {
                                         socket = s;
-                                        rz.addr = addr;
+                                        rz.addr = new_addr.clone();
+                                        addr = new_addr;
                                     }
                                     last_dns_check = Instant::now();
                                 }
@@ -336,9 +331,9 @@ impl RendezvousMediator {
             addr: conn.local_addr().into_target_addr()?,
             host: host.clone(),
             host_prefix: Self::get_host_prefix(&host),
-            keep_alive: DEFAULT_KEEP_ALIVE,
+            keep_alive: crate::DEFAULT_KEEP_ALIVE,
         };
-        let mut timer = interval(TIMER_OUT);
+        let mut timer = crate::rustdesk_interval(interval(crate::TIMER_OUT));
         let mut last_register_sent: Option<Instant> = None;
         let mut last_recv_msg = Instant::now();
         // we won't support connecting to multiple rendzvous servers any more, so we can use a global variable here.
@@ -384,7 +379,17 @@ impl RendezvousMediator {
 
     pub async fn start(server: ServerPtr, host: String) -> ResultType<()> {
         log::info!("start rendezvous mediator of {}", host);
-        if cfg!(debug_assertions) && option_env!("TEST_TCP").is_some() {
+        //If the investment agent type is http or https, then tcp forwarding is enabled.
+        let is_http_proxy = if let Some(conf) = Config::get_socks() {
+            let proxy = Proxy::from_conf(&conf, None)?;
+            proxy.is_http_or_https()
+        } else {
+            false
+        };
+        if (cfg!(debug_assertions) && option_env!("TEST_TCP").is_some())
+            || is_http_proxy
+            || get_buildin_option(config::keys::OPTION_DISABLE_UDP) == "Y"
+        {
             Self::start_tcp(server, host).await
         } else {
             Self::start_udp(server, host).await
@@ -449,25 +454,41 @@ impl RendezvousMediator {
     }
 
     async fn handle_intranet(&self, fla: FetchLocalAddr, server: ServerPtr) -> ResultType<()> {
-        let relay_server = self.get_relay_server(fla.relay_server);
-        if !is_ipv4(&self.addr) {
-            // nat64, go relay directly, because current hbbs will crash if demangle ipv6 address
-            let uuid = Uuid::new_v4().to_string();
-            return self
-                .create_relay(
-                    fla.socket_addr.into(),
-                    relay_server,
-                    uuid,
-                    server,
-                    true,
-                    true,
-                )
-                .await;
+        let relay_server = self.get_relay_server(fla.relay_server.clone());
+        // nat64, go relay directly, because current hbbs will crash if demangle ipv6 address
+        if is_ipv4(&self.addr) && !config::is_disable_tcp_listen() && !Config::is_proxy() {
+            if let Err(err) = self
+                .handle_intranet_(fla.clone(), server.clone(), relay_server.clone())
+                .await
+            {
+                log::debug!("Failed to handle intranet: {:?}, will try relay", err);
+            } else {
+                return Ok(());
+            }
         }
+        let uuid = Uuid::new_v4().to_string();
+        self.create_relay(
+            fla.socket_addr.into(),
+            relay_server,
+            uuid,
+            server,
+            true,
+            true,
+        )
+        .await
+    }
+
+    async fn handle_intranet_(
+        &self,
+        fla: FetchLocalAddr,
+        server: ServerPtr,
+        relay_server: String,
+    ) -> ResultType<()> {
         let peer_addr = AddrMangle::decode(&fla.socket_addr);
         log::debug!("Handle intranet from {:?}", peer_addr);
         let mut socket = connect_tcp(&*self.host, CONNECT_TIMEOUT).await?;
         let local_addr = socket.local_addr();
+        // we saw invalid local_addr while using proxy, local_addr.ip() == "::1"
         let local_addr: SocketAddr =
             format!("{}:{}", local_addr.ip(), local_addr.port()).parse()?;
         let mut msg_out = Message::new();
@@ -489,6 +510,7 @@ impl RendezvousMediator {
         let relay_server = self.get_relay_server(ph.relay_server);
         if ph.nat_type.enum_value() == Ok(NatType::SYMMETRIC)
             || Config::get_nat_type() == NatType::SYMMETRIC as i32
+            || config::is_disable_tcp_listen()
         {
             let uuid = Uuid::new_v4().to_string();
             return self
@@ -748,8 +770,17 @@ async fn query_online_states_(
             return Ok((Vec::new(), Vec::new()));
         }
 
-        let mut socket = create_online_stream().await?;
-        socket.send(&msg_out).await?;
+        let mut socket = match create_online_stream().await {
+            Ok(s) => s,
+            Err(e) => {
+                log::debug!("Failed to create peers online stream, {e}");
+                return Ok((vec![], ids.clone()));
+            }
+        };
+        if let Err(e) = socket.send(&msg_out).await {
+            log::debug!("Failed to send peers online states query, {e}");
+            return Ok((vec![], ids.clone()));
+        }
         if let Some(msg_in) = crate::common::get_next_nonkeyexchange_msg(&mut socket, None).await {
             match msg_in.union {
                 Some(rendezvous_message::Union::OnlineResponse(online_response)) => {
